@@ -1,0 +1,698 @@
+{
+  "info": {
+    "name": "OTPify - OTP Microservice",
+    "description": "Valid and error-case requests for the OTPify service. Run folder 1 first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Valid requests (success cases)",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Liveness probe."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate OTP (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "Creates an OTP. Saves otp_id and otp into collection variables for the next requests.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"student@college.edu\",\n  \"length\": 6,\n  \"ttl\": 120,\n  \"type\": \"numeric\",\n  \"max_attempts\": 3\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "const d = pm.response.json().data;",
+                  "pm.collectionVariables.set('otp_id', d.otp_id);",
+                  "pm.collectionVariables.set('otp', d.otp);",
+                  "pm.test('OTP has 6 digits', () => pm.expect(d.otp).to.match(/^\\d{6}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get OTP status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/{{otp_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "{{otp_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Never exposes the code', () => pm.expect(pm.response.json().data).to.not.have.property('otp'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp_id\": \"{{otp_id}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('verified is true', () => pm.expect(pm.response.json().data.verified).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate OTP via query (browser-friendly)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/quick?identifier=demo@x.com&length=8&type=alphanumeric",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "quick"
+              ],
+              "query": [
+                {
+                  "key": "identifier",
+                  "value": "demo@x.com"
+                },
+                {
+                  "key": "length",
+                  "value": "8"
+                },
+                {
+                  "key": "type",
+                  "value": "alphanumeric"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke OTP",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/{{otp_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "{{otp_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stats"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Invalid requests (error cases)",
+      "item": [
+        {
+          "name": "Generate - missing identifier (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"length\": 6\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is VALIDATION_FAILED', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_FAILED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate - length out of range (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"a@b.com\",\n  \"length\": 99\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is VALIDATION_FAILED', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_FAILED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate - malformed JSON (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"identifier\": \"oops\","
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is MALFORMED_JSON', () => pm.expect(pm.response.json().error.code).to.eql('MALFORMED_JSON'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate - wrong content type (415)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "generate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "identifier=test"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 415', () => pm.response.to.have.status(415));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify - wrong code (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "Pre-request script creates a fresh OTP so this always returns 401.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp_id\": \"{{otp_id2}}\",\n  \"otp\": \"000000\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is OTP_INCORRECT', () => pm.expect(pm.response.json().error.code).to.eql('OTP_INCORRECT'));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({url: pm.collectionVariables.get('baseUrl') + '/api/otp/generate', method: 'POST',",
+                  "  header: {'Content-Type': 'application/json'}, body: {mode: 'raw', raw: JSON.stringify({identifier: 'wrong@x.com', type: 'alphanumeric'})}},",
+                  "  (err, res) => pm.collectionVariables.set('otp_id2', res.json().data.otp_id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify - already used (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp_id\": \"{{used_id}}\",\n  \"otp\": \"{{used_otp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is OTP_ALREADY_USED', () => pm.expect(pm.response.json().error.code).to.eql('OTP_ALREADY_USED'));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({url: base + '/api/otp/generate', method: 'POST', header: {'Content-Type': 'application/json'},",
+                  "  body: {mode: 'raw', raw: JSON.stringify({identifier: 'used@x.com'})}}, (e, r) => {",
+                  "  const d = r.json().data; pm.collectionVariables.set('used_id', d.otp_id); pm.collectionVariables.set('used_otp', d.otp);",
+                  "  pm.sendRequest({url: base + '/api/otp/verify', method: 'POST', header: {'Content-Type': 'application/json'},",
+                  "    body: {mode: 'raw', raw: JSON.stringify({otp_id: d.otp_id, otp: d.otp})}}, () => {});",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify - unknown otp_id (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp_id\": \"does-not-exist\",\n  \"otp\": \"123456\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is OTP_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('OTP_NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp-generator",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp-generator"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is ROUTE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('ROUTE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wrong method (405)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/otp/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "otp",
+                "verify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 405', () => pm.response.to.have.status(405));",
+                  "pm.test('Response is JSON with request_id', () => pm.expect(pm.response.json()).to.have.property('request_id'));",
+                  "pm.test('Has X-Request-ID header', () => pm.response.to.have.header('X-Request-ID'));",
+                  "pm.test('Error code is METHOD_NOT_ALLOWED', () => pm.expect(pm.response.json().error.code).to.eql('METHOD_NOT_ALLOWED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "otp_id",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "otp_id2",
+      "value": ""
+    },
+    {
+      "key": "used_id",
+      "value": ""
+    },
+    {
+      "key": "used_otp",
+      "value": ""
+    }
+  ]
+}

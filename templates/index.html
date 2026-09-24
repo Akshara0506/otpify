@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ service }} — OTP microservice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF0EC; --panel:#FFFFFF; --line:#D4D9D0; --ink:#18222F; --muted:#5B6673;
+    --casing:#2B3544; --casing-edge:#1D2531; --lcd:#A9B89A; --lcd-ink:#1E2A18; --lcd-dim:rgba(30,42,24,.09);
+    --signal:#2447C9; --ok:#1E7045; --ok-bg:#E3F1E8; --err:#B8321A; --err-bg:#F8E6E1; --warn:#8A5A00; --warn-bg:#FBF0D9;
+    --ui:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --lcdfont:"Share Tech Mono", "Consolas", monospace;
+    --code:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--ui)}
+  button,input,select{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+
+  /* Top bar */
+  .top{display:flex;flex-wrap:wrap;align-items:center;gap:16px 28px;margin-bottom:28px}
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand h1{margin:0;font-size:1.75rem;font-weight:700;letter-spacing:-.02em}
+  .brand p{margin:0;color:var(--muted)}
+  .health{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:.875rem}
+  .dot{width:9px;height:9px;border-radius:50%;background:#999}
+  .dot.up{background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg)}
+  .dot.down{background:var(--err);box-shadow:0 0 0 3px var(--err-bg)}
+  .counters{margin-left:auto;display:flex;gap:22px;font-size:.875rem;color:var(--muted)}
+  .counters b{display:block;color:var(--ink);font-size:1.25rem;font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start}
+  .panel,.lcd,.device{min-width:0}
+  @media (max-width:880px){.grid{grid-template-columns:minmax(0,1fr)}.counters{margin-left:0}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .panel h2{margin:0 0 4px;font-size:1.2rem;letter-spacing:-.01em}
+  .panel .sub{margin:0 0 18px;color:var(--muted);font-size:.9375rem}
+
+  /* The token device — the one bold element on the page */
+  .device{background:linear-gradient(180deg,var(--casing),var(--casing-edge));border-radius:22px 22px 14px 14px;padding:22px 22px 18px;color:#C9D1DB;margin-bottom:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .device-head{display:flex;justify-content:space-between;font-size:.8125rem;margin-bottom:12px;color:#9AA6B4}
+  .lcd{background:var(--lcd);border-radius:8px;padding:18px 16px 14px;box-shadow:inset 0 2px 6px rgba(0,0,0,.35)}
+  .digits{display:flex;justify-content:center;gap:.14em;font-family:var(--lcdfont);font-size:min(3.6rem, calc((min(100vw, 560px) - 110px) / (var(--n, 6) * 1.2)));line-height:1;color:var(--lcd-ink);text-align:center;min-height:1em;white-space:nowrap;overflow:hidden}
+  .cell{position:relative;display:inline-block;width:1ch;text-align:center}
+  .cell::before{content:"8";position:absolute;left:0;right:0;color:var(--lcd-dim)}
+  .cell span{position:relative}
+  .digits.expired .cell span{color:rgba(30,42,24,.3)}
+  .bar{height:6px;margin-top:14px;background:var(--lcd-dim);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--lcd-ink);transition:width 1s linear}
+  .lcd-foot{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--lcdfont);font-size:.9rem;color:var(--lcd-ink)}
+  .device-id{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:.8125rem}
+  .device-id code{flex:1;font-family:var(--code);color:#E4E9EF;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .device-id button{background:transparent;border:1px solid #4A5667;color:#C9D1DB;border-radius:6px;padding:3px 10px;cursor:pointer}
+  .device-id button:hover{border-color:#8795A8}
+
+  /* Forms */
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fields .full{grid-column:1/-1}
+  label{display:block;font-size:.875rem;font-weight:600;margin-bottom:5px}
+  label small{font-weight:400;color:var(--muted)}
+  input[type=text],input[type=number],select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#FBFCFA}
+  input:focus,select:focus{border-color:var(--signal)}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:9px;padding:11px 18px;font-weight:600;cursor:pointer;background:var(--signal);color:#fff}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+
+  .boxes{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+  .boxes input{width:44px;height:54px;text-align:center;font:600 1.5rem var(--lcdfont);border:1px solid var(--line);border-radius:9px;background:#FBFCFA;text-transform:uppercase}
+  .boxes input:focus{border-color:var(--signal)}
+
+  .result{margin-top:18px;padding:12px 14px;border-radius:10px;font-size:.9375rem;display:none}
+  .result.show{display:block}
+  .result.ok{background:var(--ok-bg);color:var(--ok)}
+  .result.err{background:var(--err-bg);color:var(--err)}
+  .result.warn{background:var(--warn-bg);color:var(--warn)}
+  .result strong{display:block}
+
+  .errors{margin-top:22px;border-top:1px solid var(--line);padding-top:18px}
+  .errors h3{margin:0 0 4px;font-size:1rem}
+  .errors p{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);background:#FBFCFA;border-radius:8px;padding:6px 11px;font-size:.875rem;cursor:pointer}
+  .chip:hover{border-color:var(--err);color:var(--err)}
+  .chip b{font-variant-numeric:tabular-nums;margin-right:4px}
+
+  /* Inspector */
+  .inspector{margin-top:24px}
+  .inspector-head{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .log{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .empty{padding:26px;text-align:center;color:var(--muted)}
+  details.req{border-top:1px solid var(--line)}
+  details.req:first-child{border-top:0}
+  details.req summary{display:grid;grid-template-columns:70px 1fr 150px 80px 90px;gap:10px;align-items:center;padding:10px 14px;cursor:pointer;list-style:none;font-size:.9rem}
+  details.req summary::-webkit-details-marker{display:none}
+  details.req[open] summary{background:#F5F7F3}
+  .m{font-weight:700}.m.GET{color:#1E7045}.m.POST{color:var(--signal)}.m.DELETE{color:var(--err)}.m.PUT{color:var(--warn)}
+  .path{font-family:var(--code);font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st{justify-self:start;white-space:nowrap;padding:1px 9px;border-radius:999px;font-weight:600;font-size:.8125rem;font-variant-numeric:tabular-nums}
+  .st.s2{background:var(--ok-bg);color:var(--ok)}.st.s4{background:var(--err-bg);color:var(--err)}.st.s5{background:var(--err);color:#fff}
+  .time,.when{color:var(--muted);font-size:.8125rem;font-variant-numeric:tabular-nums}
+  .req-body{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px;background:#F9FAF8}
+  @media (max-width:760px){.req-body{grid-template-columns:1fr}details.req summary{grid-template-columns:60px 1fr auto}.time,.when{display:none}}
+  .req-body h4{margin:0 0 6px;font-size:.875rem}
+  .kv{margin:0 0 12px;font:12.5px/1.6 var(--code);word-break:break-all}
+  .kv div span{color:var(--muted)}
+  pre{margin:0;padding:10px 12px;background:#18222F;color:#DDE4EC;border-radius:8px;font:12.5px/1.55 var(--code);overflow:auto;max-height:280px}
+
+  /* Endpoint reference */
+  .ref{margin-top:24px}
+  .ref table{width:100%;border-collapse:collapse;font-size:.9rem}
+  .ref th,.ref td{text-align:left;padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}
+  .ref th{border-top:0;color:var(--muted);font-weight:600}
+  .ref td code{font-family:var(--code);font-size:.85rem}
+  .table-scroll{overflow-x:auto}
+
+  @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>{{ service }}</h1>
+      <p>One-time passwords as a service, for any project that needs to confirm a user.</p>
+    </div>
+    <span class="health" id="health"><span class="dot" id="healthDot"></span><span id="healthText">Checking service…</span></span>
+    <div class="counters" aria-live="polite">
+      <div><b id="cGen">0</b>generated</div>
+      <div><b id="cVer">0</b>verified</div>
+      <div><b id="cFail">0</b>wrong attempts</div>
+      <div><b id="cAct">0</b>active</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- Generate -->
+    <section class="panel" aria-labelledby="genTitle">
+      <div class="device" aria-live="polite">
+        <div class="device-head"><span id="devIdent">No code issued yet</span><span id="devType">—</span></div>
+        <div class="lcd">
+          <div class="digits" id="digits" aria-label="Current code"></div>
+          <div class="bar"><i id="bar"></i></div>
+          <div class="lcd-foot"><span id="countdown">--:--</span><span id="devStatus">idle</span></div>
+        </div>
+        <div class="device-id"><span>otp_id</span><code id="otpId">—</code><button type="button" id="copyId" disabled>Copy</button></div>
+      </div>
+
+      <h2 id="genTitle">Issue a code</h2>
+      <p class="sub">Sends <code>POST /api/otp/generate</code>. In a real app your backend would email or text the code.</p>
+      <form id="genForm" novalidate>
+        <div class="fields">
+          <div class="full">
+            <label for="identifier">Who is it for? <small>email, phone or user id</small></label>
+            <input type="text" id="identifier" value="student@college.edu" autocomplete="off">
+          </div>
+          <div>
+            <label for="type">Characters</label>
+            <select id="type"><option value="numeric">Digits only</option><option value="alphanumeric">Letters and digits</option></select>
+          </div>
+          <div>
+            <label for="length">Length <small>4–10</small></label>
+            <input type="number" id="length" value="6" min="4" max="10">
+          </div>
+          <div>
+            <label for="ttl">Valid for <small>30–600 s</small></label>
+            <input type="number" id="ttl" value="120" min="30" max="600">
+          </div>
+          <div>
+            <label for="attempts">Tries allowed <small>1–10</small></label>
+            <input type="number" id="attempts" value="3" min="1" max="10">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" type="submit" id="genBtn">Issue code</button>
+          <button class="btn ghost" type="button" id="revokeBtn" disabled>Revoke this code</button>
+        </div>
+        <div class="result" id="genResult" role="status"></div>
+      </form>
+    </section>
+
+    <!-- Verify -->
+    <section class="panel" aria-labelledby="verTitle">
+      <h2 id="verTitle">Check a code</h2>
+      <p class="sub">Sends <code>POST /api/otp/verify</code>. Each code works once, and wrong tries count against its limit.</p>
+      <form id="verForm" novalidate>
+        <label for="verId">otp_id</label>
+        <input type="text" id="verId" placeholder="Filled in when you issue a code" autocomplete="off">
+        <div style="margin-top:14px">
+          <label id="boxesLabel">Code</label>
+          <div class="boxes" id="boxes" role="group" aria-labelledby="boxesLabel"></div>
+        </div>
+        <div class="actions">
+          <button class="btn" type="submit">Check code</button>
+          <button class="btn ghost" type="button" id="statusBtn">Look up status</button>
+        </div>
+        <div class="result" id="verResult" role="status"></div>
+      </form>
+
+      <div class="errors">
+        <h3>Try the error cases</h3>
+        <p>Each button sends a deliberately bad request so you can see how the service rejects it.</p>
+        <div class="chips">
+          <button class="chip" data-case="missing"><b>400</b>Missing identifier</button>
+          <button class="chip" data-case="range"><b>400</b>Length of 99</button>
+          <button class="chip" data-case="malformed"><b>400</b>Broken JSON</button>
+          <button class="chip" data-case="wrong"><b>401</b>Wrong code</button>
+          <button class="chip" data-case="notfound"><b>404</b>Unknown otp_id</button>
+          <button class="chip" data-case="route"><b>404</b>Unknown route</button>
+          <button class="chip" data-case="method"><b>405</b>PUT on verify</button>
+          <button class="chip" data-case="media"><b>415</b>Plain-text body</button>
+          <button class="chip" data-case="burst"><b>429</b>Six codes in a row</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Inspector -->
+  <section class="panel inspector" aria-labelledby="insTitle">
+    <div class="inspector-head">
+      <div>
+        <h2 id="insTitle">Request inspector</h2>
+        <p class="sub" style="margin:0">Every call this page makes, with its headers and body. Open one to see the full exchange.</p>
+      </div>
+      <button class="btn ghost" type="button" id="clearLog">Clear</button>
+    </div>
+    <div class="log" id="log"><div class="empty">No requests yet. Issue a code to see the first one.</div></div>
+  </section>
+
+  <!-- Reference -->
+  <section class="panel ref" aria-labelledby="refTitle">
+    <h2 id="refTitle">Endpoints</h2>
+    <p class="sub">Base URL <code id="baseUrl"></code>. All responses are JSON with <code>success</code>, <code>data</code> or <code>error</code>, <code>request_id</code> and <code>timestamp</code>.</p>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Method</th><th>Path</th><th>Input</th><th>Success</th><th>Errors</th></tr></thead>
+      <tbody>
+        <tr><td class="m GET">GET</td><td><code>/api/health</code></td><td>—</td><td>200</td><td>—</td></tr>
+        <tr><td class="m POST">POST</td><td><code>/api/otp/generate</code></td><td>JSON: <code>identifier</code>*, <code>length</code>, <code>ttl</code>, <code>type</code>, <code>max_attempts</code></td><td>201</td><td>400, 415, 429</td></tr>
+        <tr><td class="m GET">GET</td><td><code>/api/otp/quick</code></td><td>Query: same fields as above</td><td>201</td><td>400, 429</td></tr>
+        <tr><td class="m POST">POST</td><td><code>/api/otp/verify</code></td><td>JSON: <code>otp_id</code>*, <code>otp</code>*</td><td>200</td><td>400, 401, 404, 409, 410, 415, 429</td></tr>
+        <tr><td class="m GET">GET</td><td><code>/api/otp/{otp_id}</code></td><td>Path: <code>otp_id</code></td><td>200</td><td>404</td></tr>
+        <tr><td class="m DELETE">DELETE</td><td><code>/api/otp/{otp_id}</code></td><td>Path: <code>otp_id</code></td><td>200</td><td>404</td></tr>
+        <tr><td class="m GET">GET</td><td><code>/api/stats</code></td><td>—</td><td>200</td><td>—</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const BASE = location.origin;
+$('#baseUrl').textContent = BASE;
+
+let current = null;   // last issued OTP
+let timer = null;
+
+/* ---------- fetch wrapper that feeds the inspector ---------- */
+async function api(method, path, {json, raw, contentType} = {}) {
+  const headers = {};
+  let body;
+  if (json !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(json); }
+  if (raw !== undefined) { headers['Content-Type'] = contentType || 'text/plain'; body = raw; }
+  headers['Accept'] = 'application/json';
+  const t0 = performance.now();
+  let res, data, text;
+  try {
+    res = await fetch(BASE + path, {method, headers, body});
+    text = await res.text();
+    try { data = JSON.parse(text); } catch { data = null; }
+  } catch (e) {
+    setHealth(false);
+    throw e;
+  }
+  const ms = performance.now() - t0;
+  const resHeaders = {};
+  res.headers.forEach((v, k) => resHeaders[k] = v);
+  logRequest({method, url: BASE + path, path, reqHeaders: headers, reqBody: body, status: res.status,
+              statusText: res.statusText, resHeaders, resBody: data ?? text, ms});
+  if (!path.includes('/stats') && !path.includes('/health')) refreshStats();
+  return {status: res.status, data};
+}
+
+/* ---------- inspector ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function kv(obj){ return Object.entries(obj).map(([k,v]) => `<div><span>${esc(k)}:</span> ${esc(v)}</div>`).join('') || '<div><span>(none)</span></div>'; }
+function logRequest(r){
+  const log = $('#log');
+  log.querySelector('.empty')?.remove();
+  const d = document.createElement('details');
+  d.className = 'req';
+  const cls = 's' + String(r.status)[0];
+  let reqBody = r.reqBody;
+  try { reqBody = JSON.stringify(JSON.parse(r.reqBody), null, 2); } catch {}
+  d.innerHTML = `
+    <summary>
+      <span class="m ${r.method}">${r.method}</span>
+      <span class="path" title="${esc(r.url)}">${esc(r.path)}</span>
+      <span class="st ${cls}">${r.status} ${esc(r.statusText || '')}</span>
+      <span class="time">${r.ms.toFixed(1)} ms</span>
+      <span class="when">${new Date().toLocaleTimeString()}</span>
+    </summary>
+    <div class="req-body">
+      <div>
+        <h4>Request</h4>
+        <div class="kv"><div><span>URL:</span> ${esc(r.url)}</div><div><span>Method:</span> ${r.method}</div>${kv(r.reqHeaders)}</div>
+        ${r.reqBody !== undefined ? `<pre>${esc(reqBody)}</pre>` : '<div class="kv"><span>(no body)</span></div>'}
+      </div>
+      <div>
+        <h4>Response · ${r.status}</h4>
+        <div class="kv">${kv(r.resHeaders)}</div>
+        <pre>${esc(typeof r.resBody === 'string' ? r.resBody : JSON.stringify(r.resBody, null, 2))}</pre>
+      </div>
+    </div>`;
+  log.prepend(d);
+  [...log.querySelectorAll('details.req')].slice(40).forEach(n => n.remove());
+}
+$('#clearLog').onclick = () => { $('#log').innerHTML = '<div class="empty">Cleared. New requests will show up here.</div>'; };
+
+/* ---------- health + stats ---------- */
+function setHealth(up, extra=''){
+  $('#healthDot').className = 'dot ' + (up ? 'up' : 'down');
+  $('#healthText').textContent = up ? `Service up on ${location.host}${extra}` : 'Service unreachable — is app.py running?';
+}
+async function checkHealth(){
+  try {
+    const r = await fetch(BASE + '/api/health'); const j = await r.json();
+    setHealth(r.ok, ` · up ${j.data.uptime_seconds}s`);
+  } catch { setHealth(false); }
+}
+async function refreshStats(){
+  try {
+    const j = await (await fetch(BASE + '/api/stats')).json();
+    $('#cGen').textContent = j.data.generated; $('#cVer').textContent = j.data.verified;
+    $('#cFail').textContent = j.data.failed_attempts; $('#cAct').textContent = j.data.active;
+  } catch {}
+}
+
+/* ---------- token device ---------- */
+function renderDigits(text){
+  $('#digits').style.setProperty('--n', text.length);
+  $('#digits').innerHTML = [...text].map(c => `<span class="cell"><span>${esc(c)}</span></span>`).join('');
+  $('#digits').setAttribute('aria-label', text.trim() ? `Current code ${text}` : 'No code yet');
+}
+function showToken(d){
+  current = {...d, issuedAt: Date.now(), total: d.expires_in_seconds};
+  renderDigits(d.otp);
+  $('#digits').classList.remove('expired');
+  $('#devIdent').textContent = d.identifier;
+  $('#devType').textContent = d.type === 'numeric' ? 'digits' : 'letters + digits';
+  $('#otpId').textContent = d.otp_id;
+  $('#copyId').disabled = false; $('#revokeBtn').disabled = false;
+  $('#devStatus').textContent = `${d.max_attempts} tries`;
+  $('#verId').value = d.otp_id;
+  buildBoxes(d.length);
+  clearInterval(timer); tick(); timer = setInterval(tick, 1000);
+}
+function tick(){
+  if (!current) return;
+  const left = Math.max(0, current.total - Math.floor((Date.now() - current.issuedAt)/1000));
+  $('#countdown').textContent = `${String(Math.floor(left/60)).padStart(2,'0')}:${String(left%60).padStart(2,'0')}`;
+  $('#bar').style.width = (left / current.total * 100) + '%';
+  if (left === 0){ clearInterval(timer); $('#digits').classList.add('expired'); $('#devStatus').textContent = 'expired'; }
+}
+function markToken(state){ clearInterval(timer); $('#digits').classList.add('expired'); $('#devStatus').textContent = state; $('#bar').style.width = '0%'; $('#revokeBtn').disabled = true; }
+$('#copyId').onclick = async () => { try { await navigator.clipboard.writeText(current.otp_id); $('#copyId').textContent = 'Copied'; setTimeout(()=>$('#copyId').textContent='Copy',1200);} catch {} };
+
+/* ---------- code boxes ---------- */
+function buildBoxes(n){
+  const wrap = $('#boxes'); wrap.innerHTML = '';
+  for (let i=0;i<n;i++){
+    const inp = document.createElement('input');
+    inp.maxLength = 1; inp.setAttribute('aria-label', `Character ${i+1} of ${n}`); inp.autocomplete = 'off';
+    inp.addEventListener('input', () => { inp.value = inp.value.toUpperCase(); if (inp.value && inp.nextElementSibling) inp.nextElementSibling.focus(); });
+    inp.addEventListener('keydown', e => { if (e.key==='Backspace' && !inp.value && inp.previousElementSibling) inp.previousElementSibling.focus(); });
+    inp.addEventListener('paste', e => {
+      e.preventDefault();
+      const txt = (e.clipboardData.getData('text')||'').replace(/\s/g,'').toUpperCase();
+      [...wrap.children].forEach((b,j)=> b.value = txt[j] || '');
+      (wrap.children[Math.min(txt.length, n)-1] || inp).focus();
+    });
+    wrap.appendChild(inp);
+  }
+}
+const boxValue = () => [...$('#boxes').children].map(i => i.value).join('');
+
+/* ---------- result banners ---------- */
+function show(el, kind, title, msg){
+  el.className = `result show ${kind}`;
+  el.innerHTML = `<strong>${esc(title)}</strong>${esc(msg || '')}`;
+}
+function explain(res){
+  const e = res.data?.error || {};
+  const nice = k => k.replace(/_/g,' ').replace(/^./, c => c.toUpperCase());
+  const details = e.details ? ' ' + Object.entries(e.details).map(([k,v])=>`${nice(k)}: ${v}.`).join(' ') : '';
+  return {title: `${res.status} · ${e.code || 'Error'}`, msg: (e.message || '') + details};
+}
+
+/* ---------- generate ---------- */
+$('#genForm').onsubmit = async e => {
+  e.preventDefault();
+  const body = { identifier: $('#identifier').value, type: $('#type').value,
+    length: Number($('#length').value), ttl: Number($('#ttl').value), max_attempts: Number($('#attempts').value) };
+  $('#genBtn').disabled = true;
+  try {
+    const res = await api('POST', '/api/otp/generate', {json: body});
+    if (res.status === 201){ showToken(res.data.data); show($('#genResult'), 'ok', 'Code issued', ` Valid for ${res.data.data.expires_in_seconds} seconds.`); }
+    else { const x = explain(res); show($('#genResult'), res.status===429?'warn':'err', x.title, ' ' + x.msg); }
+  } catch { show($('#genResult'), 'err', 'Could not reach the service', ' Start it with python app.py and reload.'); }
+  $('#genBtn').disabled = false;
+};
+
+$('#revokeBtn').onclick = async () => {
+  if (!current) return;
+  const res = await api('DELETE', `/api/otp/${current.otp_id}`);
+  if (res.status === 200){ markToken('revoked'); show($('#genResult'), 'warn', 'Code revoked', ' It can no longer be used.'); }
+};
+
+/* ---------- verify ---------- */
+$('#verForm').onsubmit = async e => {
+  e.preventDefault();
+  const res = await api('POST', '/api/otp/verify', {json: {otp_id: $('#verId').value.trim(), otp: boxValue()}});
+  if (res.status === 200){
+    show($('#verResult'), 'ok', 'Verified', ` The code for ${res.data.data.identifier} is correct. It can't be used again.`);
+    if (current && current.otp_id === res.data.data.otp_id) markToken('verified');
+  } else {
+    const x = explain(res); show($('#verResult'), res.status===429?'warn':'err', x.title, ' ' + x.msg);
+    if (res.status === 429 && current) markToken('locked');
+  }
+};
+$('#statusBtn').onclick = async () => {
+  const id = $('#verId').value.trim() || 'missing-id';
+  const res = await api('GET', `/api/otp/${encodeURIComponent(id)}`);
+  if (res.status === 200){ const d = res.data.data;
+    show($('#verResult'), 'ok', `Status: ${d.status}`, ` ${d.attempts_remaining} tries left, expires in ${d.expires_in_seconds}s.`);
+  } else { const x = explain(res); show($('#verResult'), 'err', x.title, ' ' + x.msg); }
+};
+
+/* ---------- deliberate error cases ---------- */
+const cases = {
+  missing:  () => api('POST', '/api/otp/generate', {json: {length: 6}}),
+  range:    () => api('POST', '/api/otp/generate', {json: {identifier: 'test@x.com', length: 99}}),
+  malformed:() => api('POST', '/api/otp/generate', {raw: '{"identifier": "oops",', contentType: 'application/json'}),
+  wrong:    async () => {
+    // fresh code each time, so the demo always hits 401 (never 409/410 from an old code)
+    const g = await api('POST', '/api/otp/generate', {json:{identifier:'wrong-code-demo@x.com', type:'alphanumeric'}});
+    if (g.status !== 201) return g;
+    return api('POST', '/api/otp/verify', {json: {otp_id: g.data.data.otp_id, otp: '000000'}});
+  },
+  notfound: () => api('POST', '/api/otp/verify', {json: {otp_id: 'does-not-exist', otp: '123456'}}),
+  route:    () => api('GET', '/api/otp-generator'),
+  method:   () => api('PUT', '/api/otp/verify', {json: {}}),
+  media:    () => api('POST', '/api/otp/generate', {raw: 'identifier=test'}),
+  burst:    async () => { let r; for (let i=0;i<6;i++) r = await api('POST','/api/otp/generate',{json:{identifier:'burst-demo@x.com'}}); return r; },
+};
+document.querySelectorAll('.chip').forEach(c => c.onclick = async () => {
+  const res = await cases[c.dataset.case]();
+  const x = explain(res);
+  show($('#verResult'), res.status===429?'warn':'err', x.title, ' ' + x.msg + ' The full exchange is open in the inspector below.');
+  $('#log details')?.setAttribute('open','');
+});
+
+renderDigits('      '); buildBoxes(6); checkHealth(); refreshStats(); setInterval(checkHealth, 10000);
+</script>
+</body>
+</html>
